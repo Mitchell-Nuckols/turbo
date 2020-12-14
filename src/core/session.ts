@@ -14,6 +14,7 @@ import { Action, Position, StreamSource, isAction } from "./types"
 import { dispatch } from "../util"
 import { View } from "./drive/view"
 import { Visit, VisitOptions } from "./drive/visit"
+import { fetchMethodFromString } from "../http/fetch_request"
 
 export type TimingData = {}
 
@@ -121,7 +122,7 @@ export class Session implements NavigatorDelegate {
   // Link click observer delegate
 
   willFollowLinkToLocation(link: Element, location: Location) {
-    return this.linkIsVisitable(link)
+    return this.turboIsEnabled(link)
       && this.locationIsVisitable(location)
       && this.applicationAllowsFollowingLinkToLocation(link, location)
   }
@@ -151,8 +152,10 @@ export class Session implements NavigatorDelegate {
 
   // Form submit observer delegate
 
-  willSubmitForm(form: HTMLFormElement, submitter?: HTMLElement) {
-    return true
+  willSubmitForm(form: HTMLFormElement, submitter?: HTMLElement): boolean {
+    const methodIsHttp = !!fetchMethodFromString(submitter?.getAttribute("formmethod") || form.method)
+
+    return methodIsHttp && this.turboIsEnabled(form) && (submitter ? this.turboIsEnabled(submitter) : true)
   }
 
   formSubmitted(form: HTMLFormElement, submitter?: HTMLElement) {
@@ -246,8 +249,8 @@ export class Session implements NavigatorDelegate {
     return isAction(action) ? action : "advance"
   }
 
-  linkIsVisitable(link: Element) {
-    const container = link.closest("[data-turbo]")
+  turboIsEnabled(element: Element) {
+    const container = element.closest("[data-turbo]")
     if (container) {
       return container.getAttribute("data-turbo") != "false"
     } else {

@@ -1,4 +1,4 @@
-import { FetchRequest, FetchMethod, fetchMethodFromString, FetchRequestHeaders } from "../../http/fetch_request"
+import { FetchRequest, FetchMethod, fetchMethodFromString, encodingTypeFromString, FetchRequestHeaders, EncodingType } from "../../http/fetch_request"
 import { FetchResponse } from "../../http/fetch_response"
 import { Location } from "../location"
 import { dispatch } from "../../util"
@@ -29,6 +29,7 @@ export class FormSubmission {
   readonly formElement: HTMLFormElement
   readonly submitter?: HTMLElement
   readonly formData: FormData
+  readonly encodingType: EncodingType
   readonly fetchRequest: FetchRequest
   readonly mustRedirect: boolean
   state = FormSubmissionState.initialized
@@ -38,8 +39,13 @@ export class FormSubmission {
     this.delegate = delegate
     this.formElement = formElement
     this.formData = buildFormData(formElement, submitter)
+    this.encodingType = encodingTypeFromString(this.formElement.getAttribute("enctype") || "multipart/form-data")
     this.submitter = submitter
-    this.fetchRequest = new FetchRequest(this, this.method, this.location, this.formData)
+    this.fetchRequest = new FetchRequest(this,
+      this.method,
+      this.location,
+      this.encodingType,
+      this.encodingType === EncodingType.application_json ? JSON.stringify(Object.fromEntries(this.formData)) : this.formData)
     this.mustRedirect = mustRedirect
   }
 

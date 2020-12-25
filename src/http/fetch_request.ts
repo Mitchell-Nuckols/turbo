@@ -30,7 +30,33 @@ export function fetchMethodFromString(method: string) {
   }
 }
 
-export type FetchRequestBody = FormData
+export enum EncodingType {
+  application_json,
+  application_x_www_form_urlencoded,
+  multipart_form_data
+}
+
+export function encodingTypeFromString(encoding: string): EncodingType {
+  switch (encoding.toLowerCase()) {
+    case "application/json": return EncodingType.application_json
+    case "application/x-www-form-urlencoded": return EncodingType.application_x_www_form_urlencoded
+    case "multipart/form-data": return EncodingType.multipart_form_data
+  }
+
+  return EncodingType.multipart_form_data
+}
+
+function encodingTypeToContentType(encoding: EncodingType): string {
+  switch (encoding) {
+    case EncodingType.application_json: return "application/json"
+    case EncodingType.application_x_www_form_urlencoded: return "application/x-www-form-urlencoded"
+    case EncodingType.multipart_form_data: return "multipart/form-data"
+  }
+
+  return ""
+}
+
+export type FetchRequestBody = FormData | string
 
 export type FetchRequestHeaders = { [header: string]: string }
 
@@ -43,25 +69,29 @@ export interface FetchRequestOptions {
 export class FetchRequest {
   readonly delegate: FetchRequestDelegate
   readonly method: FetchMethod
+  readonly encodingType: EncodingType
   readonly location: Location
   readonly body?: FetchRequestBody
   readonly abortController = new AbortController
 
-  constructor(delegate: FetchRequestDelegate, method: FetchMethod, location: Location, body?: FetchRequestBody) {
+  constructor(delegate: FetchRequestDelegate, method: FetchMethod, location: Location, encodingType?: EncodingType, body?: FetchRequestBody) {
     this.delegate = delegate
     this.method = method
+    this.encodingType = encodingType || EncodingType.multipart_form_data
     this.location = location
     this.body = body
   }
 
   get url() {
     const url = this.location.absoluteURL
-    const query = this.params.toString()
-    if (this.isIdempotent && query.length) {
-      return [url, query].join(url.includes("?") ? "&" : "?")
-    } else {
-      return url
+    if (this.isIdempotent) {
+      const query = this.params.toString()
+      if (query.length) {
+        return [url, query].join(url.includes("?") ? "&" : "?")
+      }
     }
+
+    return url
   }
 
   get params() {
@@ -72,7 +102,7 @@ export class FetchRequest {
   }
 
   get entries() {
-    return this.body ? Array.from(this.body.entries()) : []
+    return this.body ? Array.from((this.body as FormData).entries()) : []
   }
 
   cancel() {
@@ -107,13 +137,18 @@ export class FetchRequest {
     return fetchResponse
   }
 
+  get bodyContent() {
+    if (this.isIdempotent) return undefined
+    else return this.body
+  }
+
   get fetchOptions(): RequestInit {
     return {
       method: FetchMethod[this.method].toUpperCase(),
       credentials: "same-origin",
       headers: this.headers,
       redirect: "follow",
-      body: this.isIdempotent ? undefined : this.body,
+      body: this.bodyContent,
       signal: this.abortSignal
     }
   }
@@ -125,6 +160,7 @@ export class FetchRequest {
   get headers() {
     return {
       "Accept": "text/html, application/xhtml+xml",
+      "Content-Type": encodingTypeToContentType(this.encodingType),
       ...this.additionalHeaders
     }
   }
